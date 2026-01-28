@@ -19,7 +19,8 @@ dependencies:
     - chromadb>=0.4.22
 
     # === LLM & Embeddings ===
-    - mistralai>=1.0.0
+    - anthropic>=0.40.0
+    - voyageai>=0.3.0
 
     # === Traitement Texte ===
     - langchain>=0.1.0

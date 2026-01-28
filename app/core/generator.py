@@ -1,7 +1,7 @@
-"""Génération de réponses avec l'API Mistral."""
+"""Génération de réponses avec l'API Claude (Anthropic)."""
 
 from loguru import logger
-from mistralai import Mistral
+import anthropic
 
 from config import settings
 from app.core.retriever import RetrievedChunk
@@ -19,15 +19,15 @@ Règles importantes:
 
 
 class ResponseGenerator:
-    """Génère des réponses avec Mistral."""
+    """Génère des réponses avec Claude."""
 
     def __init__(self):
-        """Initialise le client Mistral."""
-        if not settings.mistral_api_key:
-            raise ValueError("MISTRAL_API_KEY non configurée")
+        """Initialise le client Anthropic."""
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY non configurée")
 
-        self.client = Mistral(api_key=settings.mistral_api_key)
-        self.model = settings.mistral_chat_model
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.model = settings.claude_model
 
     def generate(
         self,
@@ -66,17 +66,17 @@ Question: {question}
 Réponds en citant les sources pertinentes avec [Source N]."""
 
         try:
-            response = self.client.chat.complete(
+            response = self.client.messages.create(
                 model=self.model,
+                max_tokens=max_tokens,
+                system=SYSTEM_PROMPT,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=temperature,
-                max_tokens=max_tokens,
             )
 
-            answer = response.choices[0].message.content
+            answer = response.content[0].text
             logger.info(f"Réponse générée: {len(answer)} caractères")
             return answer
 

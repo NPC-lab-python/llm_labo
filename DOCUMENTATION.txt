@@ -64,7 +64,7 @@ SCHÉMA GLOBAL :
     +-------------------------------------------------------------------+
     |                        CORE MODULES                               |
     |  PDF Extractor  |  Chunker  |  Embedder  |  Generator            |
-    |    (PyMuPDF)    | (LangChain)|  (Mistral) |  (Mistral)           |
+    |    (PyMuPDF)    | (LangChain)| (Voyage AI)|  (Claude)            |
     |                                                                   |
     |                         RETRIEVER                                 |
     |                (Recherche sémantique ChromaDB)                    |
@@ -73,7 +73,7 @@ SCHÉMA GLOBAL :
             +---------------------+---------------------+
             v                     v                     v
     +---------------+   +-------------------+   +-------------------+
-    |   ChromaDB    |   |      SQLite       |   |    Mistral API    |
+    |   ChromaDB    |   |      SQLite       |   | Claude + Voyage   |
     |  (Vecteurs)   |   |   (Métadonnées)   |   |   (LLM + Embed)   |
     +---------------+   +-------------------+   +-------------------+
 
@@ -85,9 +85,9 @@ COMPOSANTS PRINCIPAUX :
   API REST           Point d'entrée HTTP               FastAPI + Uvicorn
   PDF Extractor      Extraction texte/métadonnées      PyMuPDF
   Chunker            Découpage texte en segments       LangChain TextSplitter
-  Embedder           Vectorisation du texte            Mistral Embed API
+  Embedder           Vectorisation du texte            Voyage AI API
   Retriever          Recherche sémantique              ChromaDB
-  Generator          Génération de réponses            Mistral Chat API
+  Generator          Génération de réponses            Claude API (Anthropic)
   SQLite             Stockage métadonnées              SQLAlchemy
   ChromaDB           Base vectorielle                  ChromaDB (embedded)
 
@@ -109,7 +109,8 @@ DÉPENDANCES PRINCIPALES :
     - ChromaDB 0.4+       Base de données vectorielle embedded
 
   LLM & Embeddings
-    - Mistral AI 1.0+     Client API Mistral officiel
+    - Anthropic 0.40+     Client API Claude officiel
+    - Voyage AI 0.3+      Client API Voyage pour embeddings
 
   Traitement Texte
     - LangChain 0.1+      Orchestration et text splitting
@@ -130,8 +131,8 @@ JUSTIFICATION DES CHOIX :
   ---------------------------------------------------------------------------
   Extraction PDF     PyMuPDF          Rapide, bon support structure
   Base vectorielle   ChromaDB         Simple, embedded, sans serveur
-  Embeddings         Mistral Embed    Cohérence écosystème, qualité FR
-  LLM                Mistral Large    Requis projet, bon rapport qualité/prix
+  Embeddings         Voyage AI        Partenaire Anthropic, haute qualité
+  LLM                Claude           Qualité supérieure, bon contexte
   API                FastAPI          Async natif, doc auto, performant
   BDD métadonnées    SQLite           Léger, sans serveur, suffisant
 
@@ -143,7 +144,8 @@ PRÉREQUIS :
 
   - Python 3.11+
   - Conda (Miniconda ou Anaconda)
-  - Clé API Mistral (console.mistral.ai)
+  - Clé API Anthropic (console.anthropic.com)
+  - Clé API Voyage AI (dash.voyageai.com)
 
 ÉTAPES :
 
@@ -159,7 +161,7 @@ PRÉREQUIS :
 
   # 4. Configurer les variables d'environnement
   cp .env.example .env
-  # Éditer .env et ajouter votre MISTRAL_API_KEY
+  # Éditer .env et ajouter ANTHROPIC_API_KEY et VOYAGE_API_KEY
 
   # 5. Lancer l'API
   python main.py
@@ -173,10 +175,13 @@ Documentation Swagger :     http://localhost:8000/docs
 
 VARIABLES D'ENVIRONNEMENT (.env) :
 
-  # === Mistral API (OBLIGATOIRE) ===
-  MISTRAL_API_KEY=your_api_key_here
-  MISTRAL_EMBED_MODEL=mistral-embed
-  MISTRAL_CHAT_MODEL=mistral-large-latest
+  # === Anthropic API - Claude (OBLIGATOIRE) ===
+  ANTHROPIC_API_KEY=your_api_key_here
+  CLAUDE_MODEL=claude-sonnet-4-20250514
+
+  # === Voyage AI API - Embeddings (OBLIGATOIRE) ===
+  VOYAGE_API_KEY=your_api_key_here
+  VOYAGE_EMBED_MODEL=voyage-3
 
   # === Chemins ===
   DATA_DIR=./data
@@ -312,7 +317,7 @@ PROCESSUS 1 : INDEXATION D'UN DOCUMENT
       |
       v
   +-------------------+
-  | 4. EMBEDDING      |  Vectorisation via Mistral Embed :
+  | 4. EMBEDDING      |  Vectorisation via Voyage AI :
   |                   |  - Batch de 16 chunks max
   |                   |  - Vecteurs de 1024 dimensions
   |                   |  - Rate limiting automatique
@@ -357,7 +362,7 @@ PROCESSUS 2 : REQUÊTE RAG
       v
   +-------------------+
   | 1. EMBEDDING      |  Vectorisation de la question
-  |    REQUÊTE        |  via Mistral Embed
+  |    REQUÊTE        |  via Voyage AI
   |                   |  -> Vecteur 1024 dimensions
   +-------------------+
       |
@@ -387,7 +392,7 @@ PROCESSUS 2 : REQUÊTE RAG
       |
       v
   +-------------------+
-  | 5. GÉNÉRATION     |  Appel Mistral Chat :
+  | 5. GÉNÉRATION     |  Appel Claude (Anthropic) :
   |    RÉPONSE        |  - Température basse (0.1)
   |                   |  - Réponse factuelle avec citations
   +-------------------+
@@ -540,7 +545,8 @@ Response:
   {
     "status": "ok",
     "chroma_status": "ok",
-    "mistral_status": "configured",
+    "claude_status": "configured",
+    "voyage_status": "configured",
     "document_count": 150
   }
 
@@ -552,7 +558,7 @@ llm_labo/
 |
 +-- main.py                      Point d'entrée - Lance l'API
 +-- environment.yml              Dépendances Conda
-+-- .env                         Configuration (MISTRAL_API_KEY)
++-- .env                         Configuration (ANTHROPIC_API_KEY, VOYAGE_API_KEY)
 +-- .env.example                 Template de configuration
 +-- .gitignore                   Fichiers ignorés par git
 +-- README.md                    Documentation Markdown
@@ -579,9 +585,9 @@ llm_labo/
 |   |   +-- __init__.py
 |   |   +-- pdf_extractor.py     Extraction texte + métadonnées PDF
 |   |   +-- chunker.py           Découpage en chunks
-|   |   +-- embedder.py          Génération embeddings Mistral
+|   |   +-- embedder.py          Génération embeddings Voyage AI
 |   |   +-- retriever.py         Recherche sémantique ChromaDB
-|   |   +-- generator.py         Génération réponses Mistral
+|   |   +-- generator.py         Génération réponses Claude
 |   |
 |   +-- models/                  Modèles de données
 |   |   +-- __init__.py

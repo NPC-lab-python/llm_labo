@@ -89,7 +89,8 @@ class HealthResponse(BaseModel):
 
     status: str
     chroma_status: str
-    mistral_status: str
+    claude_status: str
+    voyage_status: str
     document_count: int
 
 

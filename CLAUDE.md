@@ -1,21 +1,23 @@
 # LLM Labo - Système RAG pour Articles de Recherche
 
 ## Projet
-Système RAG (Retrieval-Augmented Generation) pour rechercher et citer des articles et thèses de recherche. Utilise Mistral comme LLM et ChromaDB comme base vectorielle.
+Système RAG (Retrieval-Augmented Generation) pour rechercher et citer des articles et thèses de recherche. Utilise Claude (Anthropic) comme LLM, Voyage AI pour les embeddings et ChromaDB comme base vectorielle.
 
 ## Environnement
 - **Langage** : Python 3.11
 - **Environnement** : Conda (`rag_env`)
 - **IDE** : PyCharm
 - **OS** : Windows
-- **LLM** : Mistral API (mistral-large, mistral-embed)
+- **LLM** : Claude API (Anthropic)
+- **Embeddings** : Voyage AI
 
 ## Stack Technique
 - **API** : FastAPI + Uvicorn
 - **Base vectorielle** : ChromaDB
 - **Métadonnées** : SQLite + SQLAlchemy
 - **PDF** : PyMuPDF
-- **Embeddings** : mistral-embed
+- **LLM** : anthropic (claude-sonnet-4-20250514)
+- **Embeddings** : voyageai (voyage-3)
 
 ## Conventions de Code
 - Indentation : 4 espaces
@@ -29,9 +31,11 @@ Système RAG (Retrieval-Augmented Generation) pour rechercher et citer des artic
 conda env create -f environment.yml
 conda activate rag_env
 
-# Configurer la clé API
+# Configurer les clés API
 cp .env.example .env
-# Éditer .env avec votre MISTRAL_API_KEY
+# Éditer .env avec:
+# - ANTHROPIC_API_KEY (pour Claude)
+# - VOYAGE_API_KEY (pour les embeddings)
 
 # Lancer l'API
 python main.py
@@ -50,7 +54,7 @@ pytest
 llm_labo/
 ├── main.py                 # Point d'entrée API
 ├── environment.yml         # Dépendances Conda
-├── .env                    # Configuration (MISTRAL_API_KEY)
+├── .env                    # Configuration (ANTHROPIC_API_KEY, VOYAGE_API_KEY)
 ├── config/
 │   └── settings.py         # Configuration Pydantic
 ├── app/

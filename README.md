@@ -71,8 +71,8 @@ Système: "Selon les études analysées, les principaux facteurs sont :
 │                              CORE MODULES                               │
 │  ┌──────────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
 │  │PDF Extractor │  │ Chunker  │  │ Embedder │  │Generator │            │
-│  │  (PyMuPDF)   │  │(LangChain│  │ (Mistral │  │ (Mistral │            │
-│  │              │  │  Text)   │  │  Embed)  │  │  Chat)   │            │
+│  │  (PyMuPDF)   │  │(LangChain│  │ (Voyage  │  │ (Claude) │            │
+│  │              │  │  Text)   │  │   AI)    │  │          │            │
 │  └──────────────┘  └──────────┘  └──────────┘  └──────────┘            │
 │                                                                         │
 │  ┌──────────────────────────────────────────────────────────┐          │
@@ -84,11 +84,11 @@ Système: "Selon les études analysées, les principaux facteurs sont :
         ┌───────────────────────────┼───────────────────────────┐
         ▼                           ▼                           ▼
 ┌───────────────┐       ┌───────────────────┐       ┌───────────────────┐
-│   ChromaDB    │       │      SQLite       │       │    Mistral API    │
+│   ChromaDB    │       │      SQLite       │       │  Claude + Voyage  │
 │  (Vecteurs)   │       │   (Métadonnées)   │       │   (LLM + Embed)   │
 │               │       │                   │       │                   │
-│ • embeddings  │       │ • documents       │       │ • mistral-embed   │
-│ • chunks      │       │ • chunks          │       │ • mistral-large   │
+│ • embeddings  │       │ • documents       │       │ • claude-sonnet   │
+│ • chunks      │       │ • chunks          │       │ • voyage-3        │
 │ • metadata    │       │ • références      │       │                   │
 └───────────────┘       └───────────────────┘       └───────────────────┘
 ```
@@ -100,9 +100,9 @@ Système: "Selon les études analysées, les principaux facteurs sont :
 | **API REST** | Point d'entrée HTTP | FastAPI + Uvicorn |
 | **PDF Extractor** | Extraction texte/métadonnées PDF | PyMuPDF |
 | **Chunker** | Découpage texte en segments | LangChain TextSplitter |
-| **Embedder** | Vectorisation du texte | Mistral Embed API |
+| **Embedder** | Vectorisation du texte | Voyage AI API |
 | **Retriever** | Recherche sémantique | ChromaDB |
-| **Generator** | Génération de réponses | Mistral Chat API |
+| **Generator** | Génération de réponses | Claude API (Anthropic) |
 | **SQLite** | Stockage métadonnées | SQLAlchemy |
 | **ChromaDB** | Base vectorielle | ChromaDB (embedded) |
 
@@ -125,7 +125,8 @@ Système: "Selon les études analysées, les principaux facteurs sont :
 - ChromaDB 0.4+       # Base de données vectorielle embedded
 
 # LLM & Embeddings
-- Mistral AI 1.0+     # Client API Mistral officiel
+- Anthropic 0.40+     # Client API Claude officiel
+- Voyage AI 0.3+      # Client API Voyage pour embeddings
 
 # Traitement Texte
 - LangChain 0.1+      # Orchestration et text splitting
@@ -146,8 +147,8 @@ Système: "Selon les études analysées, les principaux facteurs sont :
 |--------|-------|-------------------------|-----------------|
 | Extraction PDF | PyMuPDF | pdfplumber, PyPDF2 | Rapide, bon support structure |
 | Base vectorielle | ChromaDB | Pinecone, Weaviate, FAISS | Simple, embedded, sans serveur |
-| Embeddings | Mistral Embed | OpenAI, Cohere | Cohérence écosystème, qualité FR |
-| LLM | Mistral Large | GPT-4, Claude | Requis projet, bon rapport qualité/prix |
+| Embeddings | Voyage AI | OpenAI, Cohere | Partenaire Anthropic, haute qualité |
+| LLM | Claude (Anthropic) | GPT-4, Mistral | Qualité supérieure, bon contexte |
 | API | FastAPI | Flask, Django | Async natif, doc auto, performant |
 | BDD métadonnées | SQLite | PostgreSQL | Léger, sans serveur, suffisant |
 
@@ -159,7 +160,8 @@ Système: "Selon les études analysées, les principaux facteurs sont :
 
 - Python 3.11+
 - Conda (Miniconda ou Anaconda)
-- Clé API Mistral ([console.mistral.ai](https://console.mistral.ai))
+- Clé API Anthropic ([console.anthropic.com](https://console.anthropic.com))
+- Clé API Voyage AI ([dash.voyageai.com](https://dash.voyageai.com))
 
 ### Étapes
 
@@ -176,7 +178,7 @@ conda activate rag_env
 
 # 4. Configurer les variables d'environnement
 cp .env.example .env
-# Éditer .env et ajouter votre MISTRAL_API_KEY
+# Éditer .env et ajouter ANTHROPIC_API_KEY et VOYAGE_API_KEY
 
 # 5. Lancer l'API
 python main.py
@@ -193,10 +195,13 @@ Documentation Swagger : `http://localhost:8000/docs`
 ### Variables d'Environnement (.env)
 
 ```bash
-# === Mistral API (OBLIGATOIRE) ===
-MISTRAL_API_KEY=your_api_key_here
-MISTRAL_EMBED_MODEL=mistral-embed        # Modèle d'embeddings
-MISTRAL_CHAT_MODEL=mistral-large-latest  # Modèle de génération
+# === Anthropic API - Claude (OBLIGATOIRE) ===
+ANTHROPIC_API_KEY=your_api_key_here
+CLAUDE_MODEL=claude-sonnet-4-20250514    # Modèle de génération
+
+# === Voyage AI API - Embeddings (OBLIGATOIRE) ===
+VOYAGE_API_KEY=your_api_key_here
+VOYAGE_EMBED_MODEL=voyage-3              # Modèle d'embeddings
 
 # === Chemins ===
 DATA_DIR=./data                    # Répertoire données
@@ -341,7 +346,7 @@ curl -X DELETE http://localhost:8000/api/v1/documents/{document_id}
          │
          ▼
 ┌─────────────────┐
-│  4. EMBEDDING   │  Vectorisation via Mistral Embed :
+│  4. EMBEDDING   │  Vectorisation via Voyage AI :
 │                 │  • Batch de 16 chunks max
 │                 │  • Vecteurs de 1024 dimensions
 │                 │  • Rate limiting automatique
@@ -399,7 +404,7 @@ Document original (3000 chars)
          ▼
 ┌─────────────────┐
 │ 1. EMBEDDING    │  Vectorisation de la question
-│    REQUÊTE      │  via Mistral Embed
+│    REQUÊTE      │  via Voyage AI
 │                 │  → Vecteur 1024 dimensions
 └────────┬────────┘
          │
@@ -429,7 +434,7 @@ Document original (3000 chars)
          │
          ▼
 ┌─────────────────┐
-│ 5. GÉNÉRATION   │  Appel Mistral Chat :
+│ 5. GÉNÉRATION   │  Appel Claude (Anthropic) :
 │    RÉPONSE      │  • Température basse (0.1)
 │                 │  • Réponse factuelle avec citations
 └────────┬────────┘
@@ -598,7 +603,8 @@ Vérifie l'état du système.
 {
   "status": "ok",
   "chroma_status": "ok",
-  "mistral_status": "configured",
+  "claude_status": "configured",
+  "voyage_status": "configured",
   "document_count": 150
 }
 ```
@@ -612,7 +618,7 @@ llm_labo/
 │
 ├── main.py                      # Point d'entrée - Lance l'API
 ├── environment.yml              # Dépendances Conda
-├── .env                         # Configuration (MISTRAL_API_KEY)
+├── .env                         # Configuration (ANTHROPIC_API_KEY, VOYAGE_API_KEY)
 ├── .env.example                 # Template de configuration
 ├── .gitignore                   # Fichiers ignorés par git
 ├── README.md                    # Cette documentation
@@ -638,9 +644,9 @@ llm_labo/
 │   │   ├── __init__.py
 │   │   ├── pdf_extractor.py     # Extraction texte + métadonnées PDF
 │   │   ├── chunker.py           # Découpage en chunks
-│   │   ├── embedder.py          # Génération embeddings Mistral
+│   │   ├── embedder.py          # Génération embeddings Voyage AI
 │   │   ├── retriever.py         # Recherche sémantique ChromaDB
-│   │   └── generator.py         # Génération réponses Mistral
+│   │   └── generator.py         # Génération réponses Claude
 │   │
 │   ├── models/                  # Modèles de données
 │   │   ├── __init__.py

@@ -1,24 +1,24 @@
-"""Génération d'embeddings avec l'API Mistral."""
+"""Génération d'embeddings avec l'API Voyage AI."""
 
 import time
 from loguru import logger
-from mistralai import Mistral
+import voyageai
 
 from config import settings
 
 
-class MistralEmbedder:
-    """Génère des embeddings avec l'API Mistral."""
+class VoyageEmbedder:
+    """Génère des embeddings avec l'API Voyage AI."""
 
     def __init__(self):
-        """Initialise le client Mistral."""
-        if not settings.mistral_api_key:
-            raise ValueError("MISTRAL_API_KEY non configurée")
+        """Initialise le client Voyage AI."""
+        if not settings.voyage_api_key:
+            raise ValueError("VOYAGE_API_KEY non configurée")
 
-        self.client = Mistral(api_key=settings.mistral_api_key)
-        self.model = settings.mistral_embed_model
-        self.batch_size = 16  # Limite Mistral
-        self.rate_limit_delay = 0.5  # Délai entre les requêtes
+        self.client = voyageai.Client(api_key=settings.voyage_api_key)
+        self.model = settings.voyage_embed_model
+        self.batch_size = 128  # Limite Voyage AI
+        self.rate_limit_delay = 0.1  # Délai entre les requêtes
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """
@@ -43,13 +43,13 @@ class MistralEmbedder:
             logger.debug(f"Batch {i // self.batch_size + 1}: {len(batch)} textes")
 
             try:
-                response = self.client.embeddings.create(
+                response = self.client.embed(
+                    texts=batch,
                     model=self.model,
-                    inputs=batch,
+                    input_type="document",
                 )
 
-                batch_embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(batch_embeddings)
+                all_embeddings.extend(response.embeddings)
 
                 # Rate limiting
                 if i + self.batch_size < len(texts):
@@ -72,17 +72,25 @@ class MistralEmbedder:
         Returns:
             Vecteur d'embedding.
         """
-        embeddings = self.embed_texts([query])
-        return embeddings[0]
+        try:
+            response = self.client.embed(
+                texts=[query],
+                model=self.model,
+                input_type="query",
+            )
+            return response.embeddings[0]
+        except Exception as e:
+            logger.error(f"Erreur lors de la génération d'embedding requête: {e}")
+            raise
 
 
 # Instance globale (lazy loading)
-_embedder: MistralEmbedder | None = None
+_embedder: VoyageEmbedder | None = None
 
 
-def get_embedder() -> MistralEmbedder:
+def get_embedder() -> VoyageEmbedder:
     """Retourne l'instance de l'embedder (lazy loading)."""
     global _embedder
     if _embedder is None:
-        _embedder = MistralEmbedder()
+        _embedder = VoyageEmbedder()
     return _embedder

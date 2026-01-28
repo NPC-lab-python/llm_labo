@@ -54,13 +54,17 @@ async def health_check():
         chroma_status = f"error: {e}"
         doc_count = 0
 
-    # Vérification Mistral
-    mistral_status = "configured" if settings.mistral_api_key else "not_configured"
+    # Vérification Claude (Anthropic)
+    claude_status = "configured" if settings.anthropic_api_key else "not_configured"
+
+    # Vérification Voyage AI
+    voyage_status = "configured" if settings.voyage_api_key else "not_configured"
 
     return {
         "status": "ok",
         "chroma_status": chroma_status,
-        "mistral_status": mistral_status,
+        "claude_status": claude_status,
+        "voyage_status": voyage_status,
         "document_count": doc_count,
     }
 

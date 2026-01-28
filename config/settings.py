@@ -13,10 +13,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # === Mistral API ===
-    mistral_api_key: str = ""
-    mistral_embed_model: str = "mistral-embed"
-    mistral_chat_model: str = "mistral-large-latest"
+    # === Anthropic API (Claude) ===
+    anthropic_api_key: str = ""
+    claude_model: str = "claude-sonnet-4-20250514"
+
+    # === Voyage AI API (Embeddings) ===
+    voyage_api_key: str = ""
+    voyage_embed_model: str = "voyage-3"
 
     # === Chemins ===
     data_dir: Path = Path("./data")
