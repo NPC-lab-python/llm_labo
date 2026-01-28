@@ -1,0 +1,709 @@
+# RAG System - Recherche dans les Articles de Recherche
+
+Système de **Retrieval-Augmented Generation (RAG)** permettant de rechercher, interroger et citer des articles et thèses de recherche scientifique via une API REST.
+
+---
+
+## Table des Matières
+
+1. [Vue d'ensemble](#vue-densemble)
+2. [Architecture](#architecture)
+3. [Stack Technique](#stack-technique)
+4. [Installation](#installation)
+5. [Configuration](#configuration)
+6. [Utilisation](#utilisation)
+7. [Processus Fonctionnels](#processus-fonctionnels)
+8. [API Reference](#api-reference)
+9. [Structure du Projet](#structure-du-projet)
+
+---
+
+## Vue d'ensemble
+
+Ce système permet de :
+
+- **Indexer** des documents PDF (articles, thèses, rapports)
+- **Rechercher** par requête en langage naturel (recherche sémantique)
+- **Générer** des réponses contextualisées basées sur les documents
+- **Citer** automatiquement les sources avec références bibliographiques
+
+### Cas d'usage
+
+```
+Utilisateur: "Quels sont les principaux facteurs influençant X selon les études récentes ?"
+
+Système: "Selon les études analysées, les principaux facteurs sont :
+1. Facteur A (Source 1: Martin et al., 2023, p.15)
+2. Facteur B (Source 2: Dupont, 2024, p.42)
+..."
+```
+
+---
+
+## Architecture
+
+### Schéma Global
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              CLIENT HTTP                                │
+│                    (curl, Postman, Application web)                     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           API REST (FastAPI)                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │ POST /query │  │ POST /index │  │GET /documents│  │ GET /health │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+┌───────────────────────┐ ┌─────────────────┐ ┌─────────────────────────┐
+│   QUERY SERVICE       │ │ INDEXING SERVICE│ │   DOCUMENT SERVICE      │
+│   (Orchestration      │ │ (Orchestration  │ │   (CRUD documents)      │
+│    des requêtes)      │ │  indexation)    │ │                         │
+└───────────────────────┘ └─────────────────┘ └─────────────────────────┘
+          │                       │
+          ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              CORE MODULES                               │
+│  ┌──────────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
+│  │PDF Extractor │  │ Chunker  │  │ Embedder │  │Generator │            │
+│  │  (PyMuPDF)   │  │(LangChain│  │ (Mistral │  │ (Mistral │            │
+│  │              │  │  Text)   │  │  Embed)  │  │  Chat)   │            │
+│  └──────────────┘  └──────────┘  └──────────┘  └──────────┘            │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────┐          │
+│  │                      RETRIEVER                            │          │
+│  │              (Recherche sémantique ChromaDB)              │          │
+│  └──────────────────────────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+┌───────────────┐       ┌───────────────────┐       ┌───────────────────┐
+│   ChromaDB    │       │      SQLite       │       │    Mistral API    │
+│  (Vecteurs)   │       │   (Métadonnées)   │       │   (LLM + Embed)   │
+│               │       │                   │       │                   │
+│ • embeddings  │       │ • documents       │       │ • mistral-embed   │
+│ • chunks      │       │ • chunks          │       │ • mistral-large   │
+│ • metadata    │       │ • références      │       │                   │
+└───────────────┘       └───────────────────┘       └───────────────────┘
+```
+
+### Composants Principaux
+
+| Composant | Rôle | Technologie |
+|-----------|------|-------------|
+| **API REST** | Point d'entrée HTTP | FastAPI + Uvicorn |
+| **PDF Extractor** | Extraction texte/métadonnées PDF | PyMuPDF |
+| **Chunker** | Découpage texte en segments | LangChain TextSplitter |
+| **Embedder** | Vectorisation du texte | Mistral Embed API |
+| **Retriever** | Recherche sémantique | ChromaDB |
+| **Generator** | Génération de réponses | Mistral Chat API |
+| **SQLite** | Stockage métadonnées | SQLAlchemy |
+| **ChromaDB** | Base vectorielle | ChromaDB (embedded) |
+
+---
+
+## Stack Technique
+
+### Dépendances Principales
+
+```yaml
+# API
+- FastAPI 0.109+      # Framework API REST async
+- Uvicorn 0.27+       # Serveur ASGI
+- Pydantic 2.5+       # Validation des données
+
+# Extraction PDF
+- PyMuPDF 1.23+       # Lecture et extraction PDF
+
+# Base Vectorielle
+- ChromaDB 0.4+       # Base de données vectorielle embedded
+
+# LLM & Embeddings
+- Mistral AI 1.0+     # Client API Mistral officiel
+
+# Traitement Texte
+- LangChain 0.1+      # Orchestration et text splitting
+
+# Base de données
+- SQLAlchemy 2.0+     # ORM SQL
+- aiosqlite 0.19+     # SQLite async
+
+# Utilitaires
+- python-dotenv       # Variables d'environnement
+- tqdm                # Barres de progression
+- loguru              # Logging avancé
+```
+
+### Justification des Choix
+
+| Besoin | Choix | Alternatives considérées | Raison du choix |
+|--------|-------|-------------------------|-----------------|
+| Extraction PDF | PyMuPDF | pdfplumber, PyPDF2 | Rapide, bon support structure |
+| Base vectorielle | ChromaDB | Pinecone, Weaviate, FAISS | Simple, embedded, sans serveur |
+| Embeddings | Mistral Embed | OpenAI, Cohere | Cohérence écosystème, qualité FR |
+| LLM | Mistral Large | GPT-4, Claude | Requis projet, bon rapport qualité/prix |
+| API | FastAPI | Flask, Django | Async natif, doc auto, performant |
+| BDD métadonnées | SQLite | PostgreSQL | Léger, sans serveur, suffisant |
+
+---
+
+## Installation
+
+### Prérequis
+
+- Python 3.11+
+- Conda (Miniconda ou Anaconda)
+- Clé API Mistral ([console.mistral.ai](https://console.mistral.ai))
+
+### Étapes
+
+```bash
+# 1. Cloner le projet
+git clone <repository-url>
+cd llm_labo
+
+# 2. Créer l'environnement Conda
+conda env create -f environment.yml
+
+# 3. Activer l'environnement
+conda activate rag_env
+
+# 4. Configurer les variables d'environnement
+cp .env.example .env
+# Éditer .env et ajouter votre MISTRAL_API_KEY
+
+# 5. Lancer l'API
+python main.py
+```
+
+L'API sera disponible sur `http://localhost:8000`
+
+Documentation Swagger : `http://localhost:8000/docs`
+
+---
+
+## Configuration
+
+### Variables d'Environnement (.env)
+
+```bash
+# === Mistral API (OBLIGATOIRE) ===
+MISTRAL_API_KEY=your_api_key_here
+MISTRAL_EMBED_MODEL=mistral-embed        # Modèle d'embeddings
+MISTRAL_CHAT_MODEL=mistral-large-latest  # Modèle de génération
+
+# === Chemins ===
+DATA_DIR=./data                    # Répertoire données
+PDF_DIR=./data/pdfs                # PDFs à indexer
+CHROMA_DIR=./data/chroma_db        # Base vectorielle
+SQLITE_PATH=./data/metadata.db     # Base métadonnées
+
+# === Paramètres Chunking ===
+CHUNK_SIZE=1000                    # Taille max d'un chunk (caractères)
+CHUNK_OVERLAP=200                  # Chevauchement entre chunks
+
+# === Paramètres Retrieval ===
+DEFAULT_TOP_K=5                    # Nombre de résultats par défaut
+MIN_SIMILARITY_SCORE=0.7           # Score minimum de pertinence
+
+# === API ===
+API_HOST=0.0.0.0                   # Hôte (0.0.0.0 = toutes interfaces)
+API_PORT=8000                      # Port
+DEBUG=false                        # Mode debug
+```
+
+### Paramètres Recommandés
+
+| Paramètre | Valeur recommandée | Impact |
+|-----------|-------------------|--------|
+| `CHUNK_SIZE` | 800-1200 | Plus petit = plus précis, plus grand = plus de contexte |
+| `CHUNK_OVERLAP` | 15-25% de CHUNK_SIZE | Évite de couper les phrases |
+| `DEFAULT_TOP_K` | 3-7 | Plus = plus de sources, mais plus de bruit |
+
+---
+
+## Utilisation
+
+### 1. Indexer des Documents
+
+#### Via API
+
+```bash
+# Indexer un seul PDF
+curl -X POST http://localhost:8000/api/v1/index \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_path": "./data/pdfs/article.pdf",
+    "title": "Mon Article",
+    "authors": ["Dupont", "Martin"],
+    "year": 2024
+  }'
+
+# Indexer un dossier complet
+curl -X POST http://localhost:8000/api/v1/index/batch \
+  -H "Content-Type: application/json" \
+  -d '{"folder_path": "./data/pdfs"}'
+```
+
+#### Via Script
+
+```bash
+# Indexer tous les PDFs du dossier par défaut
+python scripts/index_all.py
+
+# Indexer un dossier spécifique
+python scripts/index_all.py /chemin/vers/dossier/pdfs
+```
+
+### 2. Interroger le Système
+
+```bash
+curl -X POST http://localhost:8000/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Quels sont les facteurs clés identifiés dans les études ?",
+    "top_k": 5
+  }'
+```
+
+**Réponse :**
+
+```json
+{
+  "answer": "Selon les documents analysés, les facteurs clés sont :\n1. Facteur A [Source 1]\n2. Facteur B [Source 2]...",
+  "sources": [
+    {
+      "document_id": "abc-123",
+      "title": "Étude sur les facteurs X",
+      "authors": "Dupont, Martin",
+      "year": 2024,
+      "page": 15,
+      "relevance_score": 0.92
+    }
+  ],
+  "processing_time_ms": 1250
+}
+```
+
+### 3. Gérer les Documents
+
+```bash
+# Lister tous les documents
+curl http://localhost:8000/api/v1/documents
+
+# Détails d'un document
+curl http://localhost:8000/api/v1/documents/{document_id}
+
+# Supprimer un document
+curl -X DELETE http://localhost:8000/api/v1/documents/{document_id}
+```
+
+---
+
+## Processus Fonctionnels
+
+### Processus 1 : Indexation d'un Document
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    PROCESSUS D'INDEXATION                               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+     PDF Input
+         │
+         ▼
+┌─────────────────┐
+│  1. EXTRACTION  │  PyMuPDF extrait :
+│                 │  • Texte brut page par page
+│                 │  • Métadonnées (titre, auteur, date)
+│                 │  • Hash SHA256 (déduplication)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 2. DÉDUPLICATION│  Vérification si le document existe déjà
+│                 │  via le hash SHA256
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  3. CHUNKING    │  Découpage en segments :
+│                 │  • Taille : ~1000 caractères
+│                 │  • Chevauchement : 200 caractères
+│                 │  • Préserve les phrases complètes
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  4. EMBEDDING   │  Vectorisation via Mistral Embed :
+│                 │  • Batch de 16 chunks max
+│                 │  • Vecteurs de 1024 dimensions
+│                 │  • Rate limiting automatique
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  5. STOCKAGE    │  Sauvegarde parallèle :
+│                 │  • ChromaDB : vecteurs + texte chunks
+│                 │  • SQLite : métadonnées document
+└────────┬────────┘
+         │
+         ▼
+    Document Indexé
+```
+
+#### Détail des Étapes
+
+**Étape 1 - Extraction PDF**
+```python
+# Le texte est extrait avec marqueurs de pages
+"[Page 1]\nContenu de la page 1...\n\n[Page 2]\nContenu de la page 2..."
+```
+
+**Étape 3 - Chunking**
+```
+Document original (3000 chars)
+    │
+    ├── Chunk 1 (chars 0-1000)      ──┐
+    ├── Chunk 2 (chars 800-1800)    ──┼── Chevauchement de 200 chars
+    └── Chunk 3 (chars 1600-2600)   ──┘
+```
+
+**Étape 5 - Stockage**
+
+| ChromaDB | SQLite |
+|----------|--------|
+| ID chunk | ID document |
+| Vecteur embedding | Titre, auteurs |
+| Texte du chunk | Chemin fichier |
+| Métadonnées (doc_id, page) | Hash, date indexation |
+
+---
+
+### Processus 2 : Requête RAG
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      PROCESSUS DE REQUÊTE                               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+     Question Utilisateur
+     "Quels sont les impacts de X ?"
+         │
+         ▼
+┌─────────────────┐
+│ 1. EMBEDDING    │  Vectorisation de la question
+│    REQUÊTE      │  via Mistral Embed
+│                 │  → Vecteur 1024 dimensions
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 2. RECHERCHE    │  Recherche dans ChromaDB :
+│   SÉMANTIQUE    │  • Similarité cosinus
+│                 │  • Top K résultats (défaut: 5)
+│                 │  • Filtres optionnels (année, auteur)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 3. ENRICHISSEMENT│ Pour chaque chunk trouvé :
+│    CONTEXTE     │  • Récupération métadonnées SQLite
+│                 │  • Construction référence biblio
+│                 │  • Format: "Auteur (Année). Titre. p.X"
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 4. CONSTRUCTION │  Assemblage du prompt :
+│    PROMPT       │  • System prompt (instructions)
+│                 │  • Contexte (chunks + références)
+│                 │  • Question utilisateur
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 5. GÉNÉRATION   │  Appel Mistral Chat :
+│    RÉPONSE      │  • Température basse (0.1)
+│                 │  • Réponse factuelle avec citations
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 6. FORMATAGE   │  Réponse structurée :
+│    SORTIE       │  • Texte de la réponse
+│                 │  • Liste des sources citées
+│                 │  • Temps de traitement
+└────────┬────────┘
+         │
+         ▼
+     Réponse JSON
+```
+
+#### Exemple de Prompt Généré
+
+```
+SYSTEM:
+Tu es un assistant de recherche académique expert. Tu réponds aux questions
+en te basant UNIQUEMENT sur les extraits de documents fournis.
+Cite TOUJOURS tes sources avec le format [Source N].
+
+CONTEXT:
+[Source 1: Dupont, Martin (2024). "Étude des impacts". p.15]
+Les résultats montrent que le facteur principal est...
+
+[Source 2: Bernard (2023). "Analyse comparative". p.42]
+Notre analyse révèle trois catégories d'impacts...
+
+---
+
+USER:
+Quels sont les impacts de X ?
+```
+
+---
+
+### Processus 3 : Flux de Données
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       FLUX DE DONNÉES                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+                        INDEXATION
+
+    PDF ──────► Texte ──────► Chunks ──────► Embeddings
+     │            │             │               │
+     │            │             │               │
+     ▼            ▼             ▼               ▼
+┌─────────┐  ┌─────────┐  ┌─────────┐    ┌──────────┐
+│ Fichier │  │Métadata │  │ SQLite  │    │ ChromaDB │
+│ système │  │  PDF    │  │ chunks  │    │ vecteurs │
+└─────────┘  └────┬────┘  └─────────┘    └──────────┘
+                  │                            ▲
+                  ▼                            │
+             ┌─────────┐                       │
+             │ SQLite  │                       │
+             │documents│                       │
+             └─────────┘                       │
+                                               │
+                        REQUÊTE                │
+                                               │
+    Question ──────► Embedding ────────────────┘
+        │                                      │
+        │                              Chunks pertinents
+        │                                      │
+        ▼                                      ▼
+    ┌─────────────────────────────────────────────┐
+    │              GÉNÉRATION LLM                 │
+    │   Question + Contexte (chunks) → Réponse   │
+    └─────────────────────────────────────────────┘
+                        │
+                        ▼
+                   Réponse + Sources
+```
+
+---
+
+## API Reference
+
+### POST /api/v1/query
+
+Interroge le système RAG.
+
+**Request Body:**
+```json
+{
+  "question": "string (required)",
+  "top_k": "integer (default: 5)",
+  "year_min": "integer (optional)",
+  "year_max": "integer (optional)",
+  "authors": ["string"] // optional
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "string",
+  "sources": [
+    {
+      "document_id": "string",
+      "title": "string",
+      "authors": "string",
+      "year": "integer",
+      "page": "integer",
+      "relevance_score": "float"
+    }
+  ],
+  "processing_time_ms": "integer"
+}
+```
+
+### POST /api/v1/index
+
+Indexe un document PDF.
+
+**Request Body:**
+```json
+{
+  "file_path": "string (required)",
+  "title": "string (optional)",
+  "authors": ["string"] // optional
+  "year": "integer (optional)"
+}
+```
+
+### POST /api/v1/index/batch
+
+Indexe tous les PDFs d'un dossier.
+
+**Request Body:**
+```json
+{
+  "folder_path": "string (required)"
+}
+```
+
+### GET /api/v1/documents
+
+Liste les documents indexés avec pagination.
+
+**Query Parameters:**
+- `page` (default: 1)
+- `limit` (default: 20, max: 100)
+- `status` (optional): pending, indexed, error
+- `search` (optional): recherche dans les titres
+
+### GET /api/v1/documents/{document_id}
+
+Retourne les détails d'un document.
+
+### DELETE /api/v1/documents/{document_id}
+
+Supprime un document et tous ses chunks.
+
+### GET /api/v1/health
+
+Vérifie l'état du système.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "chroma_status": "ok",
+  "mistral_status": "configured",
+  "document_count": 150
+}
+```
+
+---
+
+## Structure du Projet
+
+```
+llm_labo/
+│
+├── main.py                      # Point d'entrée - Lance l'API
+├── environment.yml              # Dépendances Conda
+├── .env                         # Configuration (MISTRAL_API_KEY)
+├── .env.example                 # Template de configuration
+├── .gitignore                   # Fichiers ignorés par git
+├── README.md                    # Cette documentation
+├── CLAUDE.md                    # Instructions pour Claude Code
+│
+├── config/
+│   ├── __init__.py
+│   └── settings.py              # Configuration centralisée (Pydantic)
+│
+├── app/
+│   ├── __init__.py
+│   │
+│   ├── api/                     # Couche API REST
+│   │   ├── __init__.py
+│   │   ├── main.py              # Application FastAPI + lifespan
+│   │   └── routes/
+│   │       ├── __init__.py
+│   │       ├── query.py         # POST /query
+│   │       ├── index.py         # POST /index, /index/batch
+│   │       └── documents.py     # GET/DELETE /documents
+│   │
+│   ├── core/                    # Logique métier
+│   │   ├── __init__.py
+│   │   ├── pdf_extractor.py     # Extraction texte + métadonnées PDF
+│   │   ├── chunker.py           # Découpage en chunks
+│   │   ├── embedder.py          # Génération embeddings Mistral
+│   │   ├── retriever.py         # Recherche sémantique ChromaDB
+│   │   └── generator.py         # Génération réponses Mistral
+│   │
+│   ├── models/                  # Modèles de données
+│   │   ├── __init__.py
+│   │   ├── schemas.py           # Schemas Pydantic (API I/O)
+│   │   └── database.py          # Modèles SQLAlchemy + session
+│   │
+│   └── services/                # Services d'orchestration
+│       ├── __init__.py
+│       ├── indexing_service.py  # Orchestration indexation
+│       └── query_service.py     # Orchestration requêtes
+│
+├── data/                        # Données (gitignore)
+│   ├── pdfs/                    # PDFs sources à indexer
+│   ├── chroma_db/               # Base vectorielle ChromaDB
+│   └── metadata.db              # Base SQLite métadonnées
+│
+├── scripts/
+│   └── index_all.py             # Script d'indexation batch CLI
+│
+└── tests/                       # Tests (à implémenter)
+    └── __init__.py
+```
+
+---
+
+## Performances et Limites
+
+### Performances Attendues
+
+| Métrique | Valeur |
+|----------|--------|
+| Temps d'indexation | ~2-3 sec/document |
+| Temps de requête | < 2 secondes |
+| Stockage ChromaDB | ~500 Mo pour 1000 docs |
+| Stockage SQLite | ~10 Mo pour 1000 docs |
+
+### Limites Actuelles
+
+- **Volume** : Optimisé pour ~1000-5000 documents
+- **Taille PDF** : PDFs textuels (pas d'OCR intégré)
+- **Langue** : Optimisé pour le français
+- **Concurrence** : API single-threaded (OK pour usage labo)
+
+### Évolutions Possibles
+
+- [ ] OCR pour PDFs scannés (Tesseract)
+- [ ] Reranking avec cross-encoder
+- [ ] Recherche hybride (sémantique + mots-clés BM25)
+- [ ] Cache Redis pour requêtes fréquentes
+- [ ] Interface web Streamlit
+- [ ] Export citations BibTeX
+
+---
+
+## Licence
+
+Projet interne - Laboratoire de recherche
+
+---
+
+## Support
+
+Pour toute question ou problème :
+- Consulter la documentation Swagger : `http://localhost:8000/docs`
+- Vérifier les logs : `loguru` affiche les détails dans la console
+# llm_labo
