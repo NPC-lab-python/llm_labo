@@ -1,0 +1,3 @@
+export { default as DocumentTable } from './DocumentTable'
+export { default as UploadModal } from './UploadModal'
+export { default as DeleteConfirmModal } from './DeleteConfirmModal'

@@ -1,8 +1,11 @@
 """Application FastAPI principale."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from config import settings
@@ -30,6 +33,18 @@ app = FastAPI(
     description="API de recherche sémantique dans les articles et thèses de recherche",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# Configuration CORS pour le développement
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Inclusion des routes
@@ -67,6 +82,12 @@ async def health_check():
         "voyage_status": voyage_status,
         "document_count": doc_count,
     }
+
+
+# Servir les fichiers statiques du frontend en production
+frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
 
 
 if __name__ == "__main__":
