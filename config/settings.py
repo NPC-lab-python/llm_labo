@@ -39,9 +39,14 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     debug: bool = False
+    api_workers: int = 4  # Nombre de workers pour le multi-processing
 
     # === ChromaDB ===
     chroma_collection_name: str = "research_documents"
+
+    # === GROBID (extraction métadonnées scientifiques) ===
+    grobid_url: str = "http://localhost:8070"
+    use_grobid: bool = True  # Désactiver si GROBID non installé
 
     def ensure_directories(self) -> None:
         """Crée les répertoires nécessaires s'ils n'existent pas."""

@@ -11,6 +11,8 @@ from app.models.database import get_db, Document
 from app.models.schemas import DocumentInfo, DocumentListResponse, MetadataQualityStats
 from app.services.indexing_service import indexing_service
 from app.core.metadata_analyzer import metadata_analyzer
+from app.core.generator import get_generator
+from app.core.retriever import get_retriever
 
 router = APIRouter()
 
@@ -254,3 +256,51 @@ async def get_document_pdf(
         media_type="application/pdf",
         filename=pdf_path.name,
     )
+
+
+@router.post("/documents/{document_id}/summary")
+async def generate_document_summary(
+    document_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Génère un résumé d'un document indexé.
+
+    - **document_id**: ID du document
+
+    Utilise Claude pour générer un résumé structuré du document.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+
+    # Récupérer le texte du document depuis ChromaDB
+    retriever = get_retriever()
+    chunks_data = retriever.collection.get(
+        where={"document_id": document_id},
+        include=["documents"]
+    )
+
+    if not chunks_data["documents"]:
+        raise HTTPException(status_code=404, detail="Contenu du document non trouvé")
+
+    # Concaténer les chunks (limité pour éviter de dépasser les limites)
+    full_text = "\n\n".join(chunks_data["documents"][:50])
+
+    try:
+        generator = get_generator()
+        summary = generator.summarize(
+            title=document.title,
+            text=full_text,
+            authors=document.authors,
+            year=document.publication_year,
+        )
+
+        return {
+            "document_id": document_id,
+            "title": document.title,
+            "summary": summary,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de génération: {e}")

@@ -43,6 +43,7 @@ class Source(BaseModel):
     authors: str | None = None
     year: int | None = None
     page: int | None = None
+    section: str | None = None  # Section normalisée (introduction, methods, results, etc.)
     relevance_score: float
 
 
@@ -101,3 +102,14 @@ class DocumentListResponse(BaseModel):
     total: int
     page: int
     limit: int
+
+
+class MetadataQualityStats(BaseModel):
+    """Statistiques de qualité des métadonnées."""
+
+    total_documents: int
+    average_score: float
+    score_distribution: dict[str, int]  # Excellent/Good/Fair/Poor
+    missing_fields: dict[str, int]  # Champs manquants par type
+    low_quality_count: int
+    documents_needing_review: list[dict]  # Top documents à corriger

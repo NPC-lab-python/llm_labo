@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getDocuments, deleteDocument, uploadPdf } from '../api/endpoints'
+import { getDocuments, deleteDocument, uploadPdf, generateSummary } from '../api/endpoints'
 
 interface UseDocumentsParams {
   page?: number
@@ -38,5 +38,11 @@ export function useUploadDocument() {
       queryClient.invalidateQueries({ queryKey: ['health'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
     },
+  })
+}
+
+export function useGenerateSummary() {
+  return useMutation({
+    mutationFn: generateSummary,
   })
 }

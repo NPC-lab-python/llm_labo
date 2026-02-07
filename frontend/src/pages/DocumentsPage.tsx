@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Search, Upload, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useDocuments, useDeleteDocument } from '../hooks/useDocuments'
-import { DocumentTable, UploadModal, DeleteConfirmModal } from '../components/documents'
+import { useDocuments, useDeleteDocument, useGenerateSummary } from '../hooks/useDocuments'
+import { DocumentTable, UploadModal, DeleteConfirmModal, SummaryModal } from '../components/documents'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -17,6 +17,9 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DocumentInfo | null>(null)
+  const [summaryTarget, setSummaryTarget] = useState<DocumentInfo | null>(null)
+  const [summaryContent, setSummaryContent] = useState<string | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   const { data, isLoading, error } = useDocuments({
     page,
@@ -26,6 +29,7 @@ export default function DocumentsPage() {
   })
 
   const deleteMutation = useDeleteDocument()
+  const summaryMutation = useGenerateSummary()
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,6 +40,25 @@ export default function DocumentsPage() {
     if (!deleteTarget) return
     await deleteMutation.mutateAsync(deleteTarget.id)
     setDeleteTarget(null)
+  }
+
+  const handleSummary = async (doc: DocumentInfo) => {
+    setSummaryTarget(doc)
+    setSummaryContent(null)
+    setSummaryError(null)
+
+    try {
+      const result = await summaryMutation.mutateAsync(doc.id)
+      setSummaryContent(result.summary)
+    } catch {
+      setSummaryError('Erreur lors de la génération du résumé')
+    }
+  }
+
+  const closeSummaryModal = () => {
+    setSummaryTarget(null)
+    setSummaryContent(null)
+    setSummaryError(null)
   }
 
   const totalPages = data ? Math.ceil(data.total / LIMIT) : 0
@@ -112,7 +135,9 @@ export default function DocumentsPage() {
                 const doc = data.documents.find((d) => d.id === id)
                 if (doc) setDeleteTarget(doc)
               }}
+              onSummary={handleSummary}
               isDeleting={deleteMutation.isPending ? deleteMutation.variables : undefined}
+              isSummarizing={summaryMutation.isPending ? summaryTarget?.id : undefined}
             />
 
             {/* Pagination */}
@@ -156,6 +181,14 @@ export default function DocumentsPage() {
         onConfirm={handleDelete}
         title={deleteTarget?.title || ''}
         isLoading={deleteMutation.isPending}
+      />
+      <SummaryModal
+        isOpen={!!summaryTarget}
+        onClose={closeSummaryModal}
+        title={summaryTarget?.title || ''}
+        summary={summaryContent}
+        isLoading={summaryMutation.isPending}
+        error={summaryError}
       />
     </div>
   )

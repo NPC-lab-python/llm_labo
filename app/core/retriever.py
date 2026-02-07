@@ -22,6 +22,8 @@ class RetrievedChunk:
     year: int | None
     page_number: int | None
     relevance_score: float
+    section: str | None = None
+    section_title: str | None = None
 
 
 class VectorRetriever:
@@ -82,7 +84,7 @@ class VectorRetriever:
         Args:
             query: Question de l'utilisateur.
             top_k: Nombre de résultats à retourner.
-            filters: Filtres sur les métadonnées (year, authors, etc.).
+            filters: Filtres sur les métadonnées (year, authors, section, etc.).
 
         Returns:
             Liste de RetrievedChunk triés par pertinence.
@@ -96,22 +98,46 @@ class VectorRetriever:
 
         # Construction des filtres ChromaDB
         where_filter = None
+        author_filter = None  # Filtre auteur géré en post-traitement
         if filters:
             where_clauses = []
             if filters.get("year_min"):
                 where_clauses.append({"year": {"$gte": filters["year_min"]}})
             if filters.get("year_max"):
                 where_clauses.append({"year": {"$lte": filters["year_max"]}})
+            if filters.get("section"):
+                # Filtre par section en post-traitement
+                # car le champ peut ne pas exister dans les anciennes métadonnées
+                top_k = top_k * 3
+            if filters.get("authors"):
+                # ChromaDB ne supporte pas $contains, on filtre en post-traitement
+                author_filter = filters["authors"]
+                if isinstance(author_filter, list):
+                    author_filter = author_filter[0].lower()
+                else:
+                    author_filter = author_filter.lower()
+                # Augmenter top_k pour compenser le filtrage
+                top_k = top_k * 5
             if where_clauses:
                 where_filter = {"$and": where_clauses} if len(where_clauses) > 1 else where_clauses[0]
 
+        # Vérifier si la collection a des documents
+        collection_count = self.collection.count()
+        if collection_count == 0:
+            logger.warning("Collection ChromaDB vide - aucun document indexé")
+            return []
+
         # Recherche
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"],
-        )
+        try:
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(top_k, collection_count),
+                where=where_filter,
+                include=["documents", "metadatas", "distances"],
+            )
+        except Exception as e:
+            logger.error(f"Erreur ChromaDB lors de la recherche: {e}")
+            return []
 
         # Conversion des résultats
         chunks = []
@@ -133,8 +159,27 @@ class VectorRetriever:
                         year=metadata.get("year"),
                         page_number=metadata.get("page_number"),
                         relevance_score=relevance_score,
+                        section=metadata.get("section"),
+                        section_title=metadata.get("section_title"),
                     )
                 )
+
+        # Post-filtrage par auteur si nécessaire
+        if author_filter and chunks:
+            chunks = [
+                c for c in chunks
+                if c.authors and author_filter in c.authors.lower()
+            ]
+            logger.info(f"Après filtrage par auteur '{author_filter}': {len(chunks)} chunks")
+
+        # Post-filtrage par section si nécessaire
+        if filters and filters.get("section") and chunks:
+            section_filter = filters["section"].lower()
+            chunks = [
+                c for c in chunks
+                if c.section and c.section.lower() == section_filter
+            ]
+            logger.info(f"Après filtrage par section '{section_filter}': {len(chunks)} chunks")
 
         logger.info(f"Trouvé {len(chunks)} chunks pertinents")
         return chunks
@@ -163,3 +208,10 @@ def get_retriever() -> VectorRetriever:
     if _retriever is None:
         _retriever = VectorRetriever()
     return _retriever
+
+
+def reset_retriever() -> None:
+    """Réinitialise l'instance du retriever (utile après suppression des données)."""
+    global _retriever
+    _retriever = None
+    logger.info("Instance du retriever réinitialisée")

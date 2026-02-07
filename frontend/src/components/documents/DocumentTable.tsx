@@ -1,4 +1,4 @@
-import { FileText, Calendar, Users, Trash2, Layers } from 'lucide-react'
+import { FileText, Calendar, Users, Trash2, Layers, ScrollText } from 'lucide-react'
 import type { DocumentInfo } from '../../api/types'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
@@ -6,10 +6,12 @@ import Button from '../ui/Button'
 interface DocumentTableProps {
   documents: DocumentInfo[]
   onDelete: (id: string) => void
+  onSummary: (doc: DocumentInfo) => void
   isDeleting?: string
+  isSummarizing?: string
 }
 
-export default function DocumentTable({ documents, onDelete, isDeleting }: DocumentTableProps) {
+export default function DocumentTable({ documents, onDelete, onSummary, isDeleting, isSummarizing }: DocumentTableProps) {
   const getStatusVariant = (status: string) => {
     switch (status) {
       case 'indexed':
@@ -122,16 +124,30 @@ export default function DocumentTable({ documents, onDelete, isDeleting }: Docum
                   {getStatusLabel(doc.status)}
                 </Badge>
               </td>
-              <td className="py-3 px-4 text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDelete(doc.id)}
-                  isLoading={isDeleting === doc.id}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <td className="py-3 px-4">
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onSummary(doc)}
+                    isLoading={isSummarizing === doc.id}
+                    disabled={doc.status !== 'indexed'}
+                    className="text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20"
+                    title="Générer un résumé"
+                  >
+                    <ScrollText className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDelete(doc.id)}
+                    isLoading={isDeleting === doc.id}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                    title="Supprimer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}

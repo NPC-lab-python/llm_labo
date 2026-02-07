@@ -9,6 +9,9 @@ import type {
   HealthResponse,
   DocumentListResponse,
   MetadataQualityStats,
+  ReindexResponse,
+  ResetResponse,
+  SummaryResponse,
 } from './types'
 
 // === Requêtes ===
@@ -27,6 +30,18 @@ export async function indexDocument(data: IndexRequest): Promise<IndexResponse> 
 
 export async function indexBatch(data: BatchIndexRequest): Promise<BatchIndexResponse> {
   const response = await apiClient.post<BatchIndexResponse>('/index/batch', data)
+  return response.data
+}
+
+export async function reindexEmbeddings(documentId?: string): Promise<ReindexResponse> {
+  const response = await apiClient.post<ReindexResponse>('/index/reindex', null, {
+    params: documentId ? { document_id: documentId } : undefined,
+  })
+  return response.data
+}
+
+export async function resetDatabases(): Promise<ResetResponse> {
+  const response = await apiClient.post<ResetResponse>('/index/reset')
   return response.data
 }
 
@@ -74,4 +89,9 @@ export async function getStats(): Promise<MetadataQualityStats> {
 export function getDocumentPdfUrl(documentId: string, page?: number): string {
   const base = `/api/v1/documents/${documentId}/pdf`
   return page ? `${base}#page=${page}` : base
+}
+
+export async function generateSummary(documentId: string): Promise<SummaryResponse> {
+  const response = await apiClient.post<SummaryResponse>(`/documents/${documentId}/summary`)
+  return response.data
 }

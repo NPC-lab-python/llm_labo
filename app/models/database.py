@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     String,
     Integer,
+    Float,
     Text,
     DateTime,
     ForeignKey,
@@ -34,10 +35,14 @@ class Document(Base):
     language = Column(String(10), default="fr")
     abstract = Column(Text)
     keywords = Column(Text)  # JSON array
+    doi = Column(String(100))  # Digital Object Identifier
+    journal = Column(Text)  # Nom du journal/conférence
+    extraction_method = Column(String(20), default="pymupdf")  # "pymupdf" ou "grobid"
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     indexed_at = Column(DateTime)
     status = Column(String(20), default="pending")
+    metadata_quality_score = Column(Float, default=0.0)  # Score de 0 à 1
 
     # Relations
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")

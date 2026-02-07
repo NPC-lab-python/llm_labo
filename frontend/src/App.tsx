@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import MainLayout from './components/layout/MainLayout'
 import ChatPage from './pages/ChatPage'
 import DocumentsPage from './pages/DocumentsPage'
+import IndexationPage from './pages/IndexationPage'
 import DashboardPage from './pages/DashboardPage'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
       <Routes>
         <Route path="/" element={<ChatPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/indexation" element={<IndexationPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

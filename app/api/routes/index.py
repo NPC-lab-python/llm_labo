@@ -110,3 +110,43 @@ async def upload_pdf(
         if pdf_path.exists():
             pdf_path.unlink()
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'upload: {e}")
+
+
+@router.post("/index/reindex")
+async def reindex_embeddings(
+    document_id: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Réindexe les embeddings d'un ou tous les documents.
+
+    - **document_id**: ID du document (optionnel, tous si non fourni)
+
+    Utile après un changement de modèle d'embedding ou pour mettre à jour
+    les embeddings avec les métadonnées enrichies.
+    """
+    try:
+        result = indexing_service.reindex_embeddings(
+            db=db,
+            document_id=document_id,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de réindexation: {e}")
+
+
+@router.post("/index/reset")
+async def reset_databases(
+    db: Session = Depends(get_db),
+):
+    """
+    Réinitialise complètement les bases de données.
+
+    Supprime tous les documents et chunks de SQLite et ChromaDB.
+    À utiliser avant une réindexation complète avec GROBID.
+    """
+    try:
+        result = indexing_service.reset_all(db=db)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de réinitialisation: {e}")

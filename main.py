@@ -13,6 +13,7 @@ def main():
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.debug,
+        workers=1 if settings.debug else settings.api_workers,
     )
 
 

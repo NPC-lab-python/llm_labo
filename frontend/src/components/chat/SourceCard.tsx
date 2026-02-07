@@ -1,4 +1,4 @@
-import { FileText, Calendar, Users, ExternalLink } from 'lucide-react'
+import { FileText, Calendar, Users, ExternalLink, BookOpen } from 'lucide-react'
 import type { Source } from '../../api/types'
 import { getDocumentPdfUrl } from '../../api/endpoints'
 import Badge from '../ui/Badge'
@@ -6,6 +6,18 @@ import Badge from '../ui/Badge'
 interface SourceCardProps {
   source: Source
   index: number
+}
+
+// Labels français pour les sections
+const SECTION_LABELS: Record<string, string> = {
+  introduction: 'Introduction',
+  methods: 'Méthodes',
+  results: 'Résultats',
+  discussion: 'Discussion',
+  conclusion: 'Conclusion',
+  abstract: 'Résumé',
+  references: 'Références',
+  other: 'Autre',
 }
 
 export default function SourceCard({ source, index }: SourceCardProps) {
@@ -23,6 +35,8 @@ export default function SourceCard({ source, index }: SourceCardProps) {
   const handleClick = () => {
     window.open(pdfUrl, '_blank')
   }
+
+  const sectionLabel = source.section ? SECTION_LABELS[source.section] || source.section : null
 
   return (
     <button
@@ -57,6 +71,12 @@ export default function SourceCard({ source, index }: SourceCardProps) {
               <span className="flex items-center gap-1">
                 <FileText className="h-3 w-3" />
                 p.{source.page}
+              </span>
+            )}
+            {sectionLabel && (
+              <span className="flex items-center gap-1 text-primary-600 dark:text-primary-400 font-medium">
+                <BookOpen className="h-3 w-3" />
+                {sectionLabel}
               </span>
             )}
           </div>

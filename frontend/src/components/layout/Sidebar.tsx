@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { MessageSquare, FileText, BarChart3, BookOpen } from 'lucide-react'
+import { MessageSquare, FileText, BarChart3, BookOpen, Database } from 'lucide-react'
 import clsx from 'clsx'
 
 const navItems = [
   { to: '/', icon: MessageSquare, label: 'Chat' },
   { to: '/documents', icon: FileText, label: 'Documents' },
+  { to: '/indexation', icon: Database, label: 'Indexation' },
   { to: '/dashboard', icon: BarChart3, label: 'Dashboard' },
 ]
 

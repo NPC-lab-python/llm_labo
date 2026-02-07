@@ -29,6 +29,7 @@ export interface Source {
   authors: string | null
   year: number | null
   page: number | null
+  section: string | null  // Section normalisée (introduction, methods, results, etc.)
   relevance_score: number
 }
 
@@ -105,6 +106,28 @@ export interface ChatFilters {
   yearMin?: number
   yearMax?: number
   authors?: string[]
+}
+
+// === Types pour la réindexation ===
+
+export interface ReindexResponse {
+  reindexed: number
+  total: number
+  errors: string[]
+  message: string
+}
+
+export interface ResetResponse {
+  status: string
+  documents_deleted: number
+  chunks_deleted: number
+  message: string
+}
+
+export interface SummaryResponse {
+  document_id: string
+  title: string
+  summary: string
 }
 
 // Alias pour clarté

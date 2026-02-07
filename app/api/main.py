@@ -70,10 +70,10 @@ async def health_check():
         doc_count = 0
 
     # Vérification Claude (Anthropic)
-    claude_status = "configured" if settings.anthropic_api_key else "not_configured"
+    claude_status = "ok" if settings.anthropic_api_key else "not_configured"
 
     # Vérification Voyage AI
-    voyage_status = "configured" if settings.voyage_api_key else "not_configured"
+    voyage_status = "ok" if settings.voyage_api_key else "not_configured"
 
     return {
         "status": "ok",

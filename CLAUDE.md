@@ -117,6 +117,7 @@ llm_labo/
 | `/api/v1/index` | POST | Indexer un PDF (par chemin) |
 | `/api/v1/index/batch` | POST | Indexer un dossier |
 | `/api/v1/upload` | POST | Uploader et indexer un PDF |
+| `/api/v1/index/reindex` | POST | Réindexer les embeddings |
 | `/api/v1/documents` | GET | Lister les documents (paginé) |
 | `/api/v1/documents/{id}` | GET | Détails d'un document |
 | `/api/v1/documents/{id}` | DELETE | Supprimer un document |
@@ -132,6 +133,7 @@ L'interface est accessible sur :
 ### Pages
 - **Chat** : Page principale pour poser des questions avec filtres (année, auteurs)
 - **Documents** : Table paginée avec upload drag & drop, recherche et suppression
+- **Indexation** : Indexation par dossier et mise à jour des embeddings
 - **Dashboard** : Statistiques, état des services, graphiques de qualité
 
 ## Notes Importantes

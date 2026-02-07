@@ -18,7 +18,7 @@ class VoyageEmbedder:
         self.client = voyageai.Client(api_key=settings.voyage_api_key)
         self.model = settings.voyage_embed_model
         self.batch_size = 128  # Limite Voyage AI
-        self.rate_limit_delay = 0.1  # Délai entre les requêtes
+        self.rate_limit_delay = 0.5  # Délai entre les requêtes
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """
