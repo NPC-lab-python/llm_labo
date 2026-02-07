@@ -77,6 +77,110 @@ class Chunk(Base):
     )
 
 
+class Reference(Base):
+    """Table des références bibliographiques extraites des documents."""
+
+    __tablename__ = "references"
+
+    id = Column(String(36), primary_key=True)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    # Champs bibliographiques
+    ref_title = Column(Text)
+    ref_authors = Column(Text)  # JSON array
+    ref_year = Column(Integer)
+    ref_journal = Column(Text)
+    ref_volume = Column(String(20))
+    ref_pages = Column(String(50))
+    ref_doi = Column(String(100))
+    ref_url = Column(Text)
+    # Format BibTeX généré
+    bibtex = Column(Text)
+    # Position dans le document
+    ref_index = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    document = relationship("Document", backref="references")
+
+    __table_args__ = (
+        Index("idx_references_document", "document_id"),
+    )
+
+
+class Project(Base):
+    """Table des projets de recherche/rédaction."""
+
+    __tablename__ = "projects"
+
+    id = Column(String(36), primary_key=True)
+    title = Column(Text, nullable=False)
+    description = Column(Text)
+    status = Column(String(20), default="draft")  # draft, in_progress, completed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relations
+    sources = relationship("ProjectSource", back_populates="project", cascade="all, delete-orphan")
+    sections = relationship("ProjectSection", back_populates="project", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_projects_status", "status"),
+    )
+
+
+class ProjectSource(Base):
+    """Table des sources associées à un projet."""
+
+    __tablename__ = "project_sources"
+
+    id = Column(String(36), primary_key=True)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    # Notes et annotations
+    notes = Column(Text)
+    highlights = Column(Text)  # JSON array d'extraits sauvegardés
+    relevance = Column(String(20), default="medium")  # low, medium, high, critical
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    project = relationship("Project", back_populates="sources")
+    document = relationship("Document")
+
+    __table_args__ = (
+        Index("idx_project_sources_project", "project_id"),
+        Index("idx_project_sources_document", "document_id"),
+    )
+
+
+class ProjectSection(Base):
+    """Table des sections rédigées d'un projet."""
+
+    __tablename__ = "project_sections"
+
+    id = Column(String(36), primary_key=True)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    # Type de section
+    section_type = Column(String(50), nullable=False)  # introduction, literature_review, methods, results, discussion, conclusion
+    section_order = Column(Integer, default=0)
+    title = Column(Text)
+    # Contenu
+    content = Column(Text)  # Texte rédigé (Markdown)
+    cited_sources = Column(Text)  # JSON array des IDs de sources citées
+    # Métadonnées
+    word_count = Column(Integer, default=0)
+    status = Column(String(20), default="draft")  # draft, review, final
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relations
+    project = relationship("Project", back_populates="sections")
+
+    __table_args__ = (
+        Index("idx_project_sections_project", "project_id"),
+        Index("idx_project_sections_type", "section_type"),
+    )
+
+
 # Création du moteur et de la session
 engine = create_engine(f"sqlite:///{settings.sqlite_path}", echo=settings.debug)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -10,7 +10,7 @@ from loguru import logger
 
 from config import settings
 from app.models.database import init_db
-from app.api.routes import query, index, documents
+from app.api.routes import query, index, documents, projects
 
 
 @asynccontextmanager
@@ -51,6 +51,7 @@ app.add_middleware(
 app.include_router(query.router, prefix="/api/v1", tags=["Query"])
 app.include_router(index.router, prefix="/api/v1", tags=["Index"])
 app.include_router(documents.router, prefix="/api/v1", tags=["Documents"])
+app.include_router(projects.router, prefix="/api/v1", tags=["Projects"])
 
 
 @app.get("/api/v1/health")

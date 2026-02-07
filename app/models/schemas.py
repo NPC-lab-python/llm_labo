@@ -113,3 +113,160 @@ class MetadataQualityStats(BaseModel):
     missing_fields: dict[str, int]  # Champs manquants par type
     low_quality_count: int
     documents_needing_review: list[dict]  # Top documents à corriger
+
+
+# === Références bibliographiques ===
+
+
+class ReferenceInfo(BaseModel):
+    """Référence bibliographique extraite."""
+
+    id: str
+    document_id: str
+    title: str | None = None
+    authors: str | None = None
+    year: int | None = None
+    journal: str | None = None
+    volume: str | None = None
+    pages: str | None = None
+    doi: str | None = None
+    url: str | None = None
+    bibtex: str | None = None
+    apa_citation: str | None = None  # Citation formatée APA
+
+
+class ReferenceListResponse(BaseModel):
+    """Liste des références d'un document."""
+
+    document_id: str
+    document_title: str
+    references: list[ReferenceInfo]
+    total: int
+
+
+# === Projets de recherche ===
+
+
+class ProjectCreate(BaseModel):
+    """Création d'un projet."""
+
+    title: str = Field(..., min_length=3, description="Titre du projet")
+    description: str | None = Field(default=None, description="Description du projet")
+
+
+class ProjectUpdate(BaseModel):
+    """Mise à jour d'un projet."""
+
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None  # draft, in_progress, completed
+
+
+class ProjectSourceCreate(BaseModel):
+    """Ajout d'une source à un projet."""
+
+    document_id: str = Field(..., description="ID du document à ajouter")
+    notes: str | None = None
+    relevance: str = Field(default="medium", description="Pertinence: low, medium, high, critical")
+
+
+class ProjectSourceUpdate(BaseModel):
+    """Mise à jour d'une source de projet."""
+
+    notes: str | None = None
+    highlights: list[str] | None = None  # Extraits sauvegardés
+    relevance: str | None = None
+
+
+class ProjectSectionCreate(BaseModel):
+    """Création d'une section de projet."""
+
+    section_type: str = Field(..., description="Type: introduction, literature_review, methods, results, discussion, conclusion")
+    title: str | None = None
+    content: str | None = None
+
+
+class ProjectSectionUpdate(BaseModel):
+    """Mise à jour d'une section."""
+
+    title: str | None = None
+    content: str | None = None
+    section_order: int | None = None
+    status: str | None = None  # draft, review, final
+
+
+class ProjectSourceInfo(BaseModel):
+    """Informations sur une source de projet."""
+
+    id: str
+    document_id: str
+    document_title: str
+    document_authors: str | None = None
+    document_year: int | None = None
+    notes: str | None = None
+    highlights: list[str] | None = None
+    relevance: str
+    added_at: datetime
+
+
+class ProjectSectionInfo(BaseModel):
+    """Informations sur une section de projet."""
+
+    id: str
+    section_type: str
+    section_order: int
+    title: str | None = None
+    content: str | None = None
+    cited_sources: list[str] | None = None
+    word_count: int
+    status: str
+    updated_at: datetime
+
+
+class ProjectInfo(BaseModel):
+    """Informations complètes sur un projet."""
+
+    id: str
+    title: str
+    description: str | None = None
+    status: str
+    sources_count: int = 0
+    sections_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectDetail(BaseModel):
+    """Détails complets d'un projet avec sources et sections."""
+
+    id: str
+    title: str
+    description: str | None = None
+    status: str
+    sources: list[ProjectSourceInfo]
+    sections: list[ProjectSectionInfo]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectListResponse(BaseModel):
+    """Liste des projets."""
+
+    projects: list[ProjectInfo]
+    total: int
+
+
+class ExportRequest(BaseModel):
+    """Demande d'export d'un projet."""
+
+    format: str = Field(default="docx", description="Format: docx, markdown, pdf")
+    include_bibliography: bool = Field(default=True, description="Inclure la bibliographie")
+    citation_style: str = Field(default="apa", description="Style: apa, ieee, vancouver")
+
+
+class ExportResponse(BaseModel):
+    """Réponse d'export."""
+
+    filename: str
+    format: str
+    download_url: str

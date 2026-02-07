@@ -130,5 +130,112 @@ export interface SummaryResponse {
   summary: string
 }
 
+// === Types pour les Projets ===
+
+export interface ProjectInfo {
+  id: string
+  title: string
+  description: string | null
+  status: 'draft' | 'in_progress' | 'completed'
+  sources_count: number
+  sections_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectSourceInfo {
+  id: string
+  document_id: string
+  document_title: string
+  document_authors: string | null
+  document_year: number | null
+  notes: string | null
+  highlights: string[] | null
+  relevance: 'low' | 'medium' | 'high' | 'critical'
+  added_at: string
+}
+
+export interface ProjectSectionInfo {
+  id: string
+  section_type: string
+  section_order: number
+  title: string | null
+  content: string | null
+  cited_sources: string[] | null
+  word_count: number
+  status: 'draft' | 'review' | 'final'
+  updated_at: string
+}
+
+export interface ProjectDetail {
+  id: string
+  title: string
+  description: string | null
+  status: 'draft' | 'in_progress' | 'completed'
+  sources: ProjectSourceInfo[]
+  sections: ProjectSectionInfo[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectListResponse {
+  projects: ProjectInfo[]
+  total: number
+}
+
+export interface ProjectCreate {
+  title: string
+  description?: string | null
+}
+
+export interface ProjectUpdate {
+  title?: string
+  description?: string
+  status?: 'draft' | 'in_progress' | 'completed'
+}
+
+export interface ProjectSourceCreate {
+  document_id: string
+  notes?: string | null
+  relevance?: 'low' | 'medium' | 'high' | 'critical'
+}
+
+export interface ProjectSectionCreate {
+  section_type: string
+  title?: string | null
+  content?: string | null
+}
+
+export interface ProjectSectionUpdate {
+  title?: string | null
+  content?: string | null
+  section_order?: number
+  status?: 'draft' | 'review' | 'final'
+}
+
+// === Types pour les Références ===
+
+export interface ReferenceInfo {
+  id: string
+  document_id: string
+  title: string | null
+  authors: string | null
+  year: number | null
+  journal: string | null
+  volume: string | null
+  pages: string | null
+  doi: string | null
+  url: string | null
+  bibtex: string | null
+  apa_citation: string | null
+}
+
+export interface ReferenceListResponse {
+  document_id: string
+  document_title: string
+  references: ReferenceInfo[]
+  total: number
+}
+
 // Alias pour clarté
 type float = number

@@ -26,6 +26,67 @@ class GrobidMetadata:
     raw_affiliations: list[str] = field(default_factory=list)
 
 
+@dataclass
+class GrobidReference:
+    """Référence bibliographique extraite par GROBID."""
+
+    title: str | None = None
+    authors: list[str] = field(default_factory=list)
+    year: int | None = None
+    journal: str | None = None
+    volume: str | None = None
+    pages: str | None = None
+    doi: str | None = None
+    url: str | None = None
+    publisher: str | None = None
+    index: int = 0
+
+    def to_bibtex(self, cite_key: str | None = None) -> str:
+        """
+        Génère une entrée BibTeX pour cette référence.
+
+        Args:
+            cite_key: Clé de citation (générée si non fournie).
+
+        Returns:
+            Entrée BibTeX formatée.
+        """
+        # Générer une clé de citation
+        if not cite_key:
+            first_author = self.authors[0].split()[-1] if self.authors else "Unknown"
+            year_str = str(self.year) if self.year else "nd"
+            cite_key = f"{first_author}{year_str}"
+
+        # Déterminer le type d'entrée
+        entry_type = "article" if self.journal else "misc"
+
+        lines = [f"@{entry_type}{{{cite_key},"]
+
+        if self.title:
+            lines.append(f'  title = {{{self.title}}},')
+        if self.authors:
+            authors_str = " and ".join(self.authors)
+            lines.append(f'  author = {{{authors_str}}},')
+        if self.year:
+            lines.append(f'  year = {{{self.year}}},')
+        if self.journal:
+            lines.append(f'  journal = {{{self.journal}}},')
+        if self.volume:
+            lines.append(f'  volume = {{{self.volume}}},')
+        if self.pages:
+            lines.append(f'  pages = {{{self.pages}}},')
+        if self.doi:
+            lines.append(f'  doi = {{{self.doi}}},')
+        if self.url:
+            lines.append(f'  url = {{{self.url}}},')
+        if self.publisher:
+            lines.append(f'  publisher = {{{self.publisher}}},')
+
+        lines.append("}")
+
+        return "\n".join(lines)
+
+
 class GrobidClient:
     """Client pour communiquer avec le serveur GROBID."""
 
@@ -256,11 +317,154 @@ class GrobidClient:
             "affiliation": affiliation,
         }
 
+    def extract_references(self, pdf_path: Path | str) -> list[GrobidReference]:
+        """
+        Extrait les références bibliographiques d'un PDF.
+
+        Args:
+            pdf_path: Chemin vers le fichier PDF.
+
+        Returns:
+            Liste de GrobidReference.
+        """
+        if not self.available:
+            return []
+
+        pdf_path = Path(pdf_path)
+        if not pdf_path.exists():
+            return []
+
+        try:
+            with open(pdf_path, "rb") as f:
+                response = requests.post(
+                    f"{self.grobid_url}/api/processReferences",
+                    files={"input": (pdf_path.name, f, "application/pdf")},
+                    data={"consolidateCitations": "1"},  # Enrichir via CrossRef
+                    headers={"Accept": "application/xml"},
+                    timeout=120,
+                )
+
+            if response.status_code != 200:
+                logger.warning(f"GROBID references erreur {response.status_code}")
+                return []
+
+            return self._parse_references(response.text)
+
+        except requests.RequestException as e:
+            logger.error(f"Erreur GROBID references: {e}")
+            return []
+
+    def _parse_references(self, tei_xml: str) -> list[GrobidReference]:
+        """Parse les références depuis le XML TEI."""
+        references = []
+
+        try:
+            root = ET.fromstring(tei_xml)
+        except ET.ParseError as e:
+            logger.error(f"Erreur parsing XML références: {e}")
+            return references
+
+        # Trouver toutes les références bibliographiques
+        for idx, bibl in enumerate(root.findall(".//tei:biblStruct", self.TEI_NS)):
+            ref = GrobidReference(index=idx)
+
+            # Titre de l'article
+            title_elem = bibl.find(".//tei:analytic/tei:title", self.TEI_NS)
+            if title_elem is not None:
+                ref.title = self._clean_text("".join(title_elem.itertext()))
+
+            # Si pas de titre dans analytic, chercher dans monogr (pour les livres)
+            if not ref.title:
+                title_elem = bibl.find(".//tei:monogr/tei:title", self.TEI_NS)
+                if title_elem is not None:
+                    ref.title = self._clean_text("".join(title_elem.itertext()))
+
+            # Auteurs
+            for author in bibl.findall(".//tei:analytic/tei:author", self.TEI_NS):
+                author_name = self._parse_author_name(author)
+                if author_name:
+                    ref.authors.append(author_name)
+
+            # Si pas d'auteurs dans analytic, chercher dans monogr
+            if not ref.authors:
+                for author in bibl.findall(".//tei:monogr/tei:author", self.TEI_NS):
+                    author_name = self._parse_author_name(author)
+                    if author_name:
+                        ref.authors.append(author_name)
+
+            # Année
+            date_elem = bibl.find(".//tei:monogr/tei:imprint/tei:date", self.TEI_NS)
+            if date_elem is not None:
+                when = date_elem.get("when", "")
+                year_match = re.search(r"(\d{4})", when or date_elem.text or "")
+                if year_match:
+                    ref.year = int(year_match.group(1))
+
+            # Journal
+            journal_elem = bibl.find(".//tei:monogr/tei:title[@level='j']", self.TEI_NS)
+            if journal_elem is not None:
+                ref.journal = self._clean_text("".join(journal_elem.itertext()))
+
+            # Volume
+            volume_elem = bibl.find(".//tei:biblScope[@unit='volume']", self.TEI_NS)
+            if volume_elem is not None and volume_elem.text:
+                ref.volume = volume_elem.text.strip()
+
+            # Pages
+            page_elem = bibl.find(".//tei:biblScope[@unit='page']", self.TEI_NS)
+            if page_elem is not None:
+                from_page = page_elem.get("from", "")
+                to_page = page_elem.get("to", "")
+                if from_page and to_page:
+                    ref.pages = f"{from_page}-{to_page}"
+                elif page_elem.text:
+                    ref.pages = page_elem.text.strip()
+
+            # DOI
+            doi_elem = bibl.find(".//tei:idno[@type='DOI']", self.TEI_NS)
+            if doi_elem is not None and doi_elem.text:
+                ref.doi = doi_elem.text.strip()
+
+            # URL
+            ptr_elem = bibl.find(".//tei:ptr[@type='url']", self.TEI_NS)
+            if ptr_elem is not None:
+                ref.url = ptr_elem.get("target", "")
+
+            # Publisher
+            publisher_elem = bibl.find(".//tei:monogr/tei:imprint/tei:publisher", self.TEI_NS)
+            if publisher_elem is not None and publisher_elem.text:
+                ref.publisher = publisher_elem.text.strip()
+
+            # Ajouter seulement si on a au moins un titre ou des auteurs
+            if ref.title or ref.authors:
+                references.append(ref)
+
+        logger.info(f"Extrait {len(references)} références bibliographiques")
+        return references
+
+    def _parse_author_name(self, author_elem) -> str | None:
+        """Parse le nom d'un auteur depuis un élément TEI."""
+        persname = author_elem.find("tei:persName", self.TEI_NS)
+        if persname is None:
+            return None
+
+        forename = persname.find("tei:forename", self.TEI_NS)
+        surname = persname.find("tei:surname", self.TEI_NS)
+
+        name_parts = []
+        if forename is not None and forename.text:
+            name_parts.append(forename.text.strip())
+        if surname is not None and surname.text:
+            name_parts.append(surname.text.strip())
+
+        return " ".join(name_parts) if name_parts else None
+
     def _parse_tei_full(self, tei_xml: str) -> dict:
         """Parse le document TEI complet."""
         result = {
             "metadata": self._parse_tei_header(tei_xml),
             "sections": [],
+            "references": [],
         }
 
         try:
@@ -287,7 +491,76 @@ class GrobidClient:
                         "text": "\n\n".join(paragraphs),
                     })
 
+        # Extraire les références depuis le back matter
+        back = root.find(".//tei:back", self.TEI_NS)
+        if back is not None:
+            for idx, bibl in enumerate(back.findall(".//tei:biblStruct", self.TEI_NS)):
+                ref = self._parse_single_reference(bibl, idx)
+                if ref:
+                    result["references"].append(ref)
+
         return result
+
+    def _parse_single_reference(self, bibl, idx: int) -> GrobidReference | None:
+        """Parse une seule référence bibliographique."""
+        ref = GrobidReference(index=idx)
+
+        # Titre
+        title_elem = bibl.find(".//tei:analytic/tei:title", self.TEI_NS)
+        if title_elem is not None:
+            ref.title = self._clean_text("".join(title_elem.itertext()))
+        if not ref.title:
+            title_elem = bibl.find(".//tei:monogr/tei:title", self.TEI_NS)
+            if title_elem is not None:
+                ref.title = self._clean_text("".join(title_elem.itertext()))
+
+        # Auteurs
+        for author in bibl.findall(".//tei:analytic/tei:author", self.TEI_NS):
+            author_name = self._parse_author_name(author)
+            if author_name:
+                ref.authors.append(author_name)
+        if not ref.authors:
+            for author in bibl.findall(".//tei:monogr/tei:author", self.TEI_NS):
+                author_name = self._parse_author_name(author)
+                if author_name:
+                    ref.authors.append(author_name)
+
+        # Année
+        date_elem = bibl.find(".//tei:monogr/tei:imprint/tei:date", self.TEI_NS)
+        if date_elem is not None:
+            when = date_elem.get("when", "")
+            year_match = re.search(r"(\d{4})", when or date_elem.text or "")
+            if year_match:
+                ref.year = int(year_match.group(1))
+
+        # Journal
+        journal_elem = bibl.find(".//tei:monogr/tei:title[@level='j']", self.TEI_NS)
+        if journal_elem is not None:
+            ref.journal = self._clean_text("".join(journal_elem.itertext()))
+
+        # Volume
+        volume_elem = bibl.find(".//tei:biblScope[@unit='volume']", self.TEI_NS)
+        if volume_elem is not None and volume_elem.text:
+            ref.volume = volume_elem.text.strip()
+
+        # Pages
+        page_elem = bibl.find(".//tei:biblScope[@unit='page']", self.TEI_NS)
+        if page_elem is not None:
+            from_page = page_elem.get("from", "")
+            to_page = page_elem.get("to", "")
+            if from_page and to_page:
+                ref.pages = f"{from_page}-{to_page}"
+            elif page_elem.text:
+                ref.pages = page_elem.text.strip()
+
+        # DOI
+        doi_elem = bibl.find(".//tei:idno[@type='DOI']", self.TEI_NS)
+        if doi_elem is not None and doi_elem.text:
+            ref.doi = doi_elem.text.strip()
+
+        if ref.title or ref.authors:
+            return ref
+        return None
 
     def _clean_text(self, text: str) -> str:
         """Nettoie le texte extrait."""

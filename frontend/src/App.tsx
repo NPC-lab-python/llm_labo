@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import MainLayout from './components/layout/MainLayout'
 import ChatPage from './pages/ChatPage'
 import DocumentsPage from './pages/DocumentsPage'
+import ProjectsPage from './pages/ProjectsPage'
+import ProjectDetailPage from './pages/ProjectDetailPage'
 import IndexationPage from './pages/IndexationPage'
 import DashboardPage from './pages/DashboardPage'
 
@@ -28,6 +30,8 @@ function App() {
       <Routes>
         <Route path="/" element={<ChatPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="/indexation" element={<IndexationPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

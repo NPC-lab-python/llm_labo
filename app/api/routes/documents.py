@@ -1,5 +1,7 @@
 """Routes pour la gestion des documents."""
 
+import json
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,12 +9,14 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.models.database import get_db, Document
-from app.models.schemas import DocumentInfo, DocumentListResponse, MetadataQualityStats
+from app.models.database import get_db, Document, Reference
+from app.models.schemas import DocumentInfo, DocumentListResponse, MetadataQualityStats, ReferenceInfo, ReferenceListResponse
 from app.services.indexing_service import indexing_service
 from app.core.metadata_analyzer import metadata_analyzer
 from app.core.generator import get_generator
 from app.core.retriever import get_retriever
+from app.core.grobid_client import get_grobid_client
+from app.services.export_service import CitationFormatter
 
 router = APIRouter()
 
@@ -304,3 +308,152 @@ async def generate_document_summary(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur de génération: {e}")
+
+
+@router.get("/documents/{document_id}/references", response_model=ReferenceListResponse)
+async def get_document_references(
+    document_id: str,
+    extract_if_missing: bool = Query(default=True, description="Extraire si non présentes"),
+    db: Session = Depends(get_db),
+) -> ReferenceListResponse:
+    """
+    Récupère les références bibliographiques d'un document.
+
+    - **document_id**: ID du document
+    - **extract_if_missing**: Extraire via GROBID si non présentes en base
+
+    Retourne les références au format APA avec BibTeX.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+
+    # Vérifier si les références sont déjà en base
+    existing_refs = db.query(Reference).filter(Reference.document_id == document_id).all()
+
+    if not existing_refs and extract_if_missing:
+        # Extraire les références via GROBID
+        pdf_path = Path(document.file_path)
+        if not pdf_path.exists():
+            raise HTTPException(status_code=404, detail="Fichier PDF introuvable")
+
+        grobid = get_grobid_client()
+        if not grobid.available:
+            raise HTTPException(status_code=503, detail="GROBID non disponible")
+
+        grobid_refs = grobid.extract_references(pdf_path)
+
+        # Sauvegarder en base
+        for gref in grobid_refs:
+            ref = Reference(
+                id=str(uuid.uuid4()),
+                document_id=document_id,
+                ref_title=gref.title,
+                ref_authors=json.dumps(gref.authors) if gref.authors else None,
+                ref_year=gref.year,
+                ref_journal=gref.journal,
+                ref_volume=gref.volume,
+                ref_pages=gref.pages,
+                ref_doi=gref.doi,
+                ref_url=gref.url,
+                bibtex=gref.to_bibtex(),
+                ref_index=gref.index,
+            )
+            db.add(ref)
+
+        db.commit()
+        existing_refs = db.query(Reference).filter(Reference.document_id == document_id).all()
+
+    # Formater les références
+    formatter = CitationFormatter()
+    ref_infos = []
+
+    for ref in sorted(existing_refs, key=lambda r: r.ref_index):
+        # Parser les auteurs
+        authors_str = None
+        if ref.ref_authors:
+            try:
+                authors_list = json.loads(ref.ref_authors)
+                authors_str = ", ".join(authors_list) if isinstance(authors_list, list) else ref.ref_authors
+            except:
+                authors_str = ref.ref_authors
+
+        # Générer la citation APA
+        apa_citation = formatter.format_apa(
+            authors=ref.ref_authors,
+            year=ref.ref_year,
+            title=ref.ref_title,
+            journal=ref.ref_journal,
+            volume=ref.ref_volume,
+            pages=ref.ref_pages,
+            doi=ref.ref_doi,
+        )
+
+        ref_infos.append(
+            ReferenceInfo(
+                id=ref.id,
+                document_id=ref.document_id,
+                title=ref.ref_title,
+                authors=authors_str,
+                year=ref.ref_year,
+                journal=ref.ref_journal,
+                volume=ref.ref_volume,
+                pages=ref.ref_pages,
+                doi=ref.ref_doi,
+                url=ref.ref_url,
+                bibtex=ref.bibtex,
+                apa_citation=apa_citation,
+            )
+        )
+
+    return ReferenceListResponse(
+        document_id=document_id,
+        document_title=document.title,
+        references=ref_infos,
+        total=len(ref_infos),
+    )
+
+
+@router.get("/documents/{document_id}/references/bibtex")
+async def get_document_bibtex(
+    document_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Exporte les références d'un document au format BibTeX.
+
+    - **document_id**: ID du document
+
+    Retourne un fichier .bib téléchargeable.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+
+    references = db.query(Reference).filter(Reference.document_id == document_id).all()
+
+    if not references:
+        raise HTTPException(status_code=404, detail="Aucune référence trouvée")
+
+    # Construire le fichier BibTeX
+    bibtex_entries = []
+    for ref in sorted(references, key=lambda r: r.ref_index):
+        if ref.bibtex:
+            bibtex_entries.append(ref.bibtex)
+
+    bibtex_content = "\n\n".join(bibtex_entries)
+
+    # Retourner comme fichier téléchargeable
+    from fastapi.responses import Response
+    import re
+
+    safe_title = re.sub(r'[^\w\s-]', '', document.title)[:30]
+    filename = f"references_{safe_title}.bib"
+
+    return Response(
+        content=bibtex_content,
+        media_type="application/x-bibtex",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
